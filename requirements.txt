@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+python-dotenv
+upsonic
+browser-use
+playwright
+requests

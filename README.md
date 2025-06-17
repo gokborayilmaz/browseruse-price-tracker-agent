@@ -63,14 +63,18 @@ All necessary dependencies are listed in the `requirements.txt` file. Make sure 
 ## Future Improvements
 
 - Add historical price tracking & trend analysis.
-- Multi-platform notifications (e.g., Telegram, Discord).
+- Multi-platform notifications (e.g., Telegram, Discord, Twitter Bots).
 - Broader e-commerce site support.
+- URL link checker for product links.
+- Faster speed.
+- Scrapedo like Web Scrapper API integration for cross checking. 
+- Different LLM models might be used for different products based on their performance.
 
 ## Contributing
 
-Pull requests are welcome! For major changes, please open an issue first to discuss the changes.
+Pull requests are welcome! For major changes, please [open an issue](https://github.com/gokborayilmaz/browseruse-price-tracker-agent/issues) first to discuss the changes.
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the [MIT License](https://en.wikipedia.org/wiki/MIT_License).
 

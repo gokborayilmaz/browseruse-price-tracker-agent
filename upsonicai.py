@@ -1,27 +1,25 @@
 import os
+import openai
+import json
+from openai import OpenAI
 from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse
 from dotenv import load_dotenv
-from upsonic import Agent, Task, ObjectResponse
-from upsonic.client.tools import BrowserUse  # Importing BrowserUse
+from pydantic import BaseModel
+import requests
 
-# Load environment variables
+
 load_dotenv()
+
+openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI()
 
 app = FastAPI(title="AI-Powered Price Tracker")
 
-# Initialize the AI agent
-price_tracker_agent = Agent("Price Tracker Agent", model="azure/gpt-4o", reflection=True)
-
-# Define response format for individual products
-class Product(ObjectResponse):
+class Product(BaseModel):
     name: str
     price: float
     url: str
-
-# Define response format for the product list
-class ProductList(ObjectResponse):
-    products: list[Product]
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -69,29 +67,89 @@ async def root():
     </html>
     """
 
+#sample product link checker for the URLs generated.
+"""
+def product_link_checker(url):
+    #Checks if a product URL is valid by searching for specific error phrases in HTML content
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        html_content = response.text.lower()
+
+        #these are common error phrases in e commerce platforms 
+        error_phrases = [
+            "dogsofamazon",            
+            "we couldn't find this page",
+            "aradığın içeriğe şu an ulaşılamıyor",
+            "the page you're looking for can't be found",            
+            "we looked everywhere",
+            "page not found",
+        ]
+        
+        for phrase in error_phrases:
+            if phrase in html_content:
+                print(phrase)
+                return False
+        
+        if response.status_code != 200:
+            return False
+        
+        return True
+    
+    except requests.exceptions.RequestException:
+        return False
+"""    
+
 @app.get("/track_price")
 async def track_price(product: str = Query(..., title="Product to Track")):
-    """Tracks product prices on multiple e-commerce websites and displays them in the app."""
+    """Tracks product prices using OpenAI to generate product information."""
     try:
-        # Task to track product prices using BrowserUse
-        track_task = Task(
-            f"Search for the product '{product}' on Amazon, eBay, and AliExpress. Retrieve product names, prices, and links.",
-            tools=[BrowserUse],
-            response_format=ProductList
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            response_format={"type": "json_object"},
+            messages=[
+                {
+                    "role": "system", 
+                    "content": """You are an e-commerce product search assistant. Always respond in strict JSON format with an array of products. If user writes generic product name such as Iphone, all three examples should be same iphone model such as Iphone 14, 64 GB.
+                        CRITICAL INSTRUCTIONS:
+                        - Always provide DIRECT product page links"""
+                },
+                {
+                    "role": "user", 
+                    "content": f"""Find 3 different product links for  this '{product}'. Check Amazon, Wallmart and trendyol. Get only product links, not search etc. 
+                    Provide the following details for each product in JSON format
+                    IMPORTANT(If user writes generic product name such as Iphone, all three examples should be same iphone model such as Iphone 14, 128 GB.)
+                    Example.com url is sample. DON'T write example.com/iphone or something else. Check out websites like Amazon.com, wallmart.com, apple.com, ebay.com trendyol.com etc.
+                    Sample links for Iphone (Amazon: https://www.amazon.com.tr/Apple-iPhone-14-128-GB/dp/B0BDHTNM23?th=1 , Wallmart: https://www.walmart.com/ip/Straight-Talk-Apple-iPhone-14-128GB-Purple-Prepaid-Smartphone-Locked-to-Straight-Talk/1450299768 , Trendyol: https://www.trendyol.com/apple/iphone-14-128-gb-mavi-p-355707135 )
+            
+                    Response should be in this exact JSON structure:
+                    {{
+                        "all_products": [
+                            {{
+                                "name": "Product Name",
+                                "price": 49.99,
+                                "url": "DIRECT Product Page URL"
+                            }},
+                            ...
+                        ]
+                    }}"""
+                }
+            ],
+            max_tokens=300
         )
-        price_tracker_agent.do(track_task)
-        response = track_task.response
 
-        if not response:
-            return {"error": "Failed to track prices."}
+        result_text = response.choices[0].message.content
+        result_data = json.loads(result_text)
 
-        # Return all products in a clean format
-        return {
-            "all_products": [{"name": p.name, "price": p.price, "url": p.url} for p in response.products]
-        }
+        return {"all_products": result_data.get('all_products', [])}
 
     except Exception as e:
         return {"error": str(e)}
+  
 
 if __name__ == "__main__":
     import uvicorn
